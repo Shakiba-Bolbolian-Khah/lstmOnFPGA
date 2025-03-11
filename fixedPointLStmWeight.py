@@ -1,6 +1,7 @@
 import numpy as np
+import csv
 
-FRAC_BITS = 8
+FRAC_BITS = 10
 BIT_WIDTH = 16
 MIN = -8
 MAX = 16
@@ -11,7 +12,7 @@ MIN_INT = -(2**(BIT_WIDTH-1))
 DIR = 'data/'
 
 
-def bankers_round(value: int, low_elements: int = FRAC_BITS) -> int:
+def bankers_round(value, low_elements: int = FRAC_BITS) -> int:
     """
     Mimics the VHDL rounding which appends "00" to the fractional bits.
     
@@ -19,6 +20,7 @@ def bankers_round(value: int, low_elements: int = FRAC_BITS) -> int:
     the fractional portion. The VHDL code concatenates "00" to these bits,
     so we simulate that by shifting left by 2.
     """
+
     # Get the integer part.
     round_hi = value >> low_elements
     # Extract the fractional part and "append" two zeros (shift left by 2). << 2 is additional to mimic the VHDL design
@@ -42,11 +44,18 @@ def bankers_round(value: int, low_elements: int = FRAC_BITS) -> int:
 v_bankers_round = np.vectorize(bankers_round)
 
 
-def tanh(arr: np.ndarray) -> np.ndarray:
-    return np.clip(arr, -(2**FRAC_BITS), 2**FRAC_BITS)
+def tanh(x: np.ndarray) -> np.ndarray:
+
+    # return (np.tanh(x/(2**FRAC_BITS))*(2**FRAC_BITS)).astype(int_type(BIT_WIDTH))
+    return np.clip(x, -(2**FRAC_BITS), 2**FRAC_BITS)
+
+def np_sigmoid(x):
+    return 1/(1 + np.exp(-x)) 
+
 
 def sigmoid(x, scale = 2**FRAC_BITS):
     
+    return (np_sigmoid(x/scale)*(scale)).astype(int_type(BIT_WIDTH))
     SHIFT_AMOUNT = 2
     ONE = scale
     OFFSET = scale // 2  # Represents 0.5
@@ -75,7 +84,7 @@ def int_type(N: int):
 def fixed_add(a: np.ndarray, b: np.ndarray) -> np.ndarray:
  
     result = a.astype(int_type(BIT_WIDTH*2)) + b.astype(int_type(BIT_WIDTH*2))
-    result = v_bankers_round(result, 0)
+    # result = v_bankers_round(result, 0)
     
     # result = np.clip(result, MIN_INT, MAX_INT).astype(int_type(BIT_WIDTH))
     return result.astype(int_type(BIT_WIDTH))
@@ -83,7 +92,7 @@ def fixed_add(a: np.ndarray, b: np.ndarray) -> np.ndarray:
 
 def fixed_mul(a: np.ndarray, b: np.ndarray, frac_bits: int = FRAC_BITS) -> np.ndarray:
 
-    product = a.astype(np.int32) * b.astype(int_type(BIT_WIDTH*2))
+    product = a.astype(int_type(BIT_WIDTH*2)) * b.astype(int_type(BIT_WIDTH*2))
     # product = product / (2 ** frac_bits)
     product = v_bankers_round(product) 
 
@@ -94,7 +103,7 @@ def fixed_matvec(matrix: np.ndarray, vector: np.ndarray, frac_bits: int = FRAC_B
 
     m, n = matrix.shape
 
-    products = np.empty((m, n), dtype=np.int32)
+    products = np.empty((m, n), dtype=int_type(BIT_WIDTH*2))
     for i in range(m):
         for j in range(n):
 
@@ -133,11 +142,46 @@ def generate_random_vector(length, name: str, min_value: int = MIN, max_value: i
     return vector
 
 
-class LSTM:
-    def __init__(self, input_size, hidden_size, hidden_units):
+def quantize_matrix(data, name: str, dir: str, quantize: bool = True, need_transpose: bool = True):
+
+    reshaped_data = data.T if need_transpose else data
+
+    if quantize:
+        quantized_data = np.round(reshaped_data * (2**FRAC_BITS)).astype(int_type(BIT_WIDTH))
+        np.savetxt(dir + name + '.csv', quantized_data.astype(int_type(BIT_WIDTH)), fmt='%i', delimiter=',')
+    else:
+        np.savetxt(dir + name + '.csv', reshaped_data.astype(np.float32), fmt='%f', delimiter=',')
+
+
+def quantize_input(data, n_input, name: str, dir: str, quantize: bool = True):
+    
+    reshaped_data = data.reshape(-1, n_input)
+    if quantize:
+        quantized_data = np.round(reshaped_data * (2**FRAC_BITS)).astype(int_type(BIT_WIDTH))
+        np.savetxt(dir + name + '.csv', quantized_data.astype(int_type(BIT_WIDTH)), fmt='%i', delimiter=',')
+    else:
+        np.savetxt(dir + name + '.csv', reshaped_data.astype(np.float32), fmt='%f', delimiter=',')
+
+
+def load_matrix(name: str, dir: str, quantize: bool = False):
+
+    with open(dir + name +'.csv', 'r') as f:
+        reader = csv.reader(f)
+        data = list(reader)
+    if quantize:
+        data_array = np.array(data, dtype=np.float32)
+        data_array = v_bankers_round((data_array * (2**FRAC_BITS)).astype(int_type(BIT_WIDTH)),0)
+    else:
+        data_array = np.array(data, dtype=int_type(BIT_WIDTH))
+    return data_array
+
+
+class SHIR_LSTM:
+    def __init__(self, input_size, hidden_size, hidden_units, output_size):
         self.input_size = input_size
         self.hidden_size = hidden_size
         self.hidden_units = hidden_units
+        self.output_size = output_size
 
     def generate_weights(self):
         self.uf = generate_random_matrix(self.hidden_size, self.hidden_size, "uf")
@@ -150,67 +194,101 @@ class LSTM:
         self.wo = generate_random_matrix(self.hidden_size, self.input_size, "wo")
         self.wc = generate_random_matrix(self.hidden_size, self.input_size, "wc")
 
+
+    def load_weights(self, dir):
+        self.uf = load_matrix("uf", dir)
+        self.ui = load_matrix("ui", dir)
+        self.uo = load_matrix("uo", dir)
+        self.uc = load_matrix("uc", dir)
+
+        self.wf = load_matrix("wf", dir)
+        self.wi = load_matrix("wi", dir)
+        self.wo = load_matrix("wo", dir)
+        self.wc = load_matrix("wc", dir)
+
+
     def generate_biases(self):
         self.bf = generate_random_vector(self.hidden_size, "bf").reshape(self.hidden_size,)
         self.bi = generate_random_vector(self.hidden_size, "bi").reshape(self.hidden_size,)
         self.bo = generate_random_vector(self.hidden_size, "bo").reshape(self.hidden_size,)
         self.bc = generate_random_vector(self.hidden_size, "bc").reshape(self.hidden_size,)
 
-    def generate_initial_state(self):
-        self.h0 = generate_random_vector(self.hidden_size, "h0")
-        self.c0 = generate_random_vector(self.hidden_size, "c0")
 
-        np.savetxt(DIR + 'state' + '.csv', np.concatenate([self.h0, self.c0]).T.astype(int_type(BIT_WIDTH)), fmt='%i', delimiter=',')
+    def load_biases(self, dir):
+        self.bf = load_matrix("bf", dir).reshape(self.hidden_size,)
+        self.bi = load_matrix("bi", dir).reshape(self.hidden_size,)
+        self.bo = load_matrix("bo", dir).reshape(self.hidden_size,)
+        self.bc = load_matrix("bc", dir).reshape(self.hidden_size,)
+
+
+    def generate_initial_state(self, dir):
+        self.h0 = np.zeros((self.hidden_size,1), dtype=int_type(BIT_WIDTH))
+        self.c0 = np.zeros((self.hidden_size,1), dtype=int_type(BIT_WIDTH))
+
+        np.savetxt(dir + 'state' + '.csv', np.concatenate([self.h0, self.c0]).T.astype(int_type(BIT_WIDTH)), fmt='%i', delimiter=',')
+
+    def load_dense_layer(self, dir):
+        self.wd = load_matrix("wd", dir)
+        self.bd = load_matrix("bd", dir).reshape(self.output_size,)
+
 
     def generate_input(self):
         self.x = generate_random_matrix(self.hidden_units, self.input_size, "x", MIN, MAX, 1)
 
 
-    def run_test(self):
-        y = []
-
-        for x_t in self.x:
-            f = fixed_matvec(self.wf, x_t)
-            y+= [f]
-
-        y = np.array(y)
-        print(y)
-        np.savetxt(DIR + 'y.csv', y.astype(int_type(BIT_WIDTH)), fmt='%i', delimiter=',')
+    def load_input(self, dir):
+        data_array = load_matrix("x", dir).reshape(-1, self.hidden_units, self.input_size)
+        self.x = data_array
 
 
-
-    def run_inference(self):
+    def run_inference(self, item, keep_output = True, test_for_accuracy = False):
         h = self.h0.reshape(self.hidden_size,)
         c = self.c0.reshape(self.hidden_size,)
         y = []
 
-        for x_t in self.x:
+        for x_t in item:
 
-            f = sigmoid(fixed_add(fixed_add(fixed_matvec(self.uf, h), fixed_matvec(self.wf, x_t)),self.bf))
+            f = sigmoid(fixed_add(fixed_add(fixed_matvec_numpy(self.uf, h), fixed_matvec_numpy(self.wf, x_t)),self.bf))
 
-            i = sigmoid(fixed_add(fixed_add(fixed_matvec(self.ui, h), fixed_matvec(self.wi, x_t)), self.bi))
+            i = sigmoid(fixed_add(fixed_add(fixed_matvec_numpy(self.ui, h), fixed_matvec_numpy(self.wi, x_t)), self.bi))
 
-            o = sigmoid(fixed_add(fixed_add(fixed_matvec(self.uo, h), fixed_matvec(self.wo, x_t)), self.bo))
+            o = sigmoid(fixed_add(fixed_add(fixed_matvec_numpy(self.uo, h), fixed_matvec_numpy(self.wo, x_t)), self.bo))
 
-            c_prime = tanh(fixed_add(fixed_add(fixed_matvec(self.uc, h), fixed_matvec(self.wc, x_t)),self.bc))
+            c_prime = tanh(fixed_add(fixed_add(fixed_matvec_numpy(self.uc, h), fixed_matvec_numpy(self.wc, x_t)),self.bc))
 
             c = fixed_add(fixed_mul(f, c),fixed_mul(i, c_prime))
 
             h = fixed_mul(tanh(c),o)
 
-            y += [np.concatenate([h,c])]
+            output = h if test_for_accuracy else np.concatenate([h,c])
+            if keep_output:
+                y += [output]
+            else:
+                y = output
 
         y = np.array(y)
-        np.savetxt(DIR + 'y.csv', y.astype(int_type(BIT_WIDTH)), fmt='%i', delimiter=',')
+        # np.savetxt(DIR + 'y.csv', y.astype(int_type(BIT_WIDTH)), fmt='%i', delimiter=',')
+        return y
 
-    def run_LSTM(self):
-        self.generate_weights()
-        self.generate_biases()
-        self.generate_initial_state()
-        self.generate_input()
-        self.run_inference()
+    def run_dense(self, item):
+        return (fixed_add(fixed_matvec_numpy(self.wd, item), self.bd))
 
+    def run_LSTM(self, dir, test_for_accuracy = False):
+        self.load_weights(dir)
+        self.load_biases(dir)
+        self.generate_initial_state(dir)
+        self.load_dense_layer(dir)
+        self.load_input(dir)
 
-lstm = LSTM(8,16,8)
-lstm.run_LSTM()
+        print(self.x.shape)
 
+        y = []
+        for item in self.x:
+            y_item = self.run_dense(self.run_inference(item, False, True))
+            y+= [y_item]
+        
+        print(type(y[0]))
+        y = np.array(y)
+        np.savetxt(dir + 'y.csv', y.astype(int_type(BIT_WIDTH)), fmt='%i', delimiter=',')
+        return(y)
+    

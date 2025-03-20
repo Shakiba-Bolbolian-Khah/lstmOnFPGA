@@ -44,18 +44,51 @@ def bankers_round(value, low_elements: int = FRAC_BITS) -> int:
 v_bankers_round = np.vectorize(bankers_round)
 
 
-def tanh(x: np.ndarray) -> np.ndarray:
+def tanh_approx(x):
+    if x <= -1.5:
+        return -1
+    elif -1.5 < x <= -0.5:
+        return x + 0.5
+    elif -0.5 < x <= 0.5:
+        return x
+    elif 0.5 < x <= 1.5:
+        return x - 0.5
+    else:
+        return 1
 
-    # return (np.tanh(x/(2**FRAC_BITS))*(2**FRAC_BITS)).astype(int_type(BIT_WIDTH))
-    return np.clip(x, -(2**FRAC_BITS), 2**FRAC_BITS)
 
-def np_sigmoid(x):
-    return 1/(1 + np.exp(-x)) 
+v_tanh = np.vectorize(tanh_approx)
+
+
+def tanh(x, scale = 2**FRAC_BITS):
+    # return (v_tanh(x/scale)*(scale)).astype(int_type(BIT_WIDTH))
+    # return (np.tanh(x/(scale))*(scale)).astype(int_type(BIT_WIDTH))
+    return np.clip(x, -(scale), scale)
+
+
+def sigmoid_approx(x):
+    # return 1/(1 + np.exp(-x)) 
+    
+    if x <= -4:
+        return 0.0
+    elif x <= -2:
+        return 0.0505 * (x + 4) + 0.018
+    elif x <= 0:
+        return 0.1905 * (x + 2) + 0.119
+    elif x <= 2:
+        return 0.1905 * x + 0.5
+    elif x <= 4:
+        return 0.0505 * (x - 2) + 0.881
+    else:
+        return 1.0
+    
+
+v_sigmoid = np.vectorize(sigmoid_approx)
 
 
 def sigmoid(x, scale = 2**FRAC_BITS):
     
-    return (np_sigmoid(x/scale)*(scale)).astype(int_type(BIT_WIDTH))
+    return (v_sigmoid(x/scale)*(scale)).astype(int_type(BIT_WIDTH))
     SHIFT_AMOUNT = 2
     ONE = scale
     OFFSET = scale // 2  # Represents 0.5
@@ -71,6 +104,7 @@ def sigmoid(x, scale = 2**FRAC_BITS):
     y_clip = np.where(y_max < ONE, y_max, ONE)
 
     return y_clip
+
 
 def int_type(N: int):
     try:
@@ -116,7 +150,6 @@ def fixed_matvec(matrix: np.ndarray, vector: np.ndarray, frac_bits: int = FRAC_B
 
 
 def fixed_matvec_numpy(matrix: np.ndarray, vector: np.ndarray, frac_bits: int = FRAC_BITS) -> np.ndarray:
-
     acc = matrix.astype(int_type(BIT_WIDTH*2)) @ vector.astype(int_type(BIT_WIDTH*2))
     result = v_bankers_round(acc)
 
@@ -270,25 +303,33 @@ class SHIR_LSTM:
         # np.savetxt(DIR + 'y.csv', y.astype(int_type(BIT_WIDTH)), fmt='%i', delimiter=',')
         return y
 
-    def run_dense(self, item):
-        return (fixed_add(fixed_matvec_numpy(self.wd, item), self.bd))
+    def run_dense(self, item, activation = "none"):
+        output = fixed_add(fixed_matvec_numpy(self.wd, item), self.bd)
+        if activation == "none":
+            return output
+        elif activation =="sigmoid":
+            return sigmoid(output)
 
-    def run_LSTM(self, dir, test_for_accuracy = False):
+    def run_LSTM(self, dir, input, is_input_file = True, test_for_accuracy = False, dense_activation = "none"):
         self.load_weights(dir)
         self.load_biases(dir)
         self.generate_initial_state(dir)
         self.load_dense_layer(dir)
-        self.load_input(dir)
+        if is_input_file:
+            self.load_input(dir)
+        else:
+            # reshaped_data = input.reshape(-1, self.input_size)
+            self.x = np.round(input * (2**FRAC_BITS)).astype(int_type(BIT_WIDTH))
 
         print(self.x.shape)
 
         y = []
         for item in self.x:
-            y_item = self.run_dense(self.run_inference(item, False, True))
+            y_item = self.run_dense(self.run_inference(item, False, True), dense_activation)
             y+= [y_item]
         
         print(type(y[0]))
         y = np.array(y)
-        np.savetxt(dir + 'y.csv', y.astype(int_type(BIT_WIDTH)), fmt='%i', delimiter=',')
+        if is_input_file:
+            np.savetxt(dir + 'y.csv', y.astype(int_type(BIT_WIDTH)), fmt='%i', delimiter=',')
         return(y)
-    

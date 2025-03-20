@@ -1,62 +1,124 @@
-# Addition of 2 MVM: W_x*X .+ W_h*H
-# Num of operations per MVM for M*N matrice: N(2M-1) (N is the final dimension)
-# Num of operations for this benchmark: STM_LEN [ 2N(M+N-1) + N ]
-# Num of read/written data: STM_LEN (M + N)
+import numpy as np
+
+IO_ROOF = 6.9
+TOTAL_DSP = 1518
 
 
-m = 512
-# int(input("m (size of hidden)?\n"))
-n = 512
-# int(input("n (size of input)?\n"))
-p = 512
-# int(input("p (size of output)?\n"))
-hiddenUnits = 256
-# int(input("stream length (number of elements in the stream)?\n"))
-cc = 214642 #58266 #42602
-# int(input("Number of CC?\n"))
-bitWidth = 16
-# int(input("Bitwidth of data?\n"))
-dsp = 192
-# int(input("Number of used DSPs:\n"))
-mulPerDSP = 2
-# float(input("Multiplications per DSP:\n"))
+
+# Number of multiplications in one LSTM layer, does not include the dense layer
+def num_ops_lstm(input_size, hidden_size, hidden_units):
+    cell_ops = 4 * hidden_size * ( input_size + hidden_size) + 3 * hidden_size
+    layer_ops = hidden_units * cell_ops
+
+    return layer_ops
 
 
-ioRoof = 6.9
-totalDSP = 1518
+# Only the memory used to read weight matrices and load them into FPGA. Writing back is not considered
+def mem_lstm(input_size, hidden_size, hidden_units, bit_width):
 
-ops_h = m*(n+m) #m*( 2*n+ 2*m- 1)
-ops_y = p*m # p*( 2*m -1)
-ops = hiddenUnits *( ops_h+ ops_y)
-print("#OPS:", ops)
-print("#OPS/cycle:", ops/cc)
-
-f = 200 * (10**6)
-
-gops = ops * f / cc
-print("***Performance***\n#OPS/s:", gops, "\n#GOPS/s:", gops * 10**(-9))
+    # input weights and hidden weights and bias vectors
+    mem_weights = 4 * (hidden_size * hidden_size + input_size * hidden_size + hidden_size)
+    
+    return mem_weights * bit_width / 8
 
 
-mem = ((hiddenUnits * n)+(m*m)+(n*m)+(p*m)) * bitWidth / 8
+#Number of multiplication in one dense layer. If it is applied to all outputs of lstm, is_all_output is set to True
+def num_ops_dense(input_size, output_size, hidden_units, is_all_output: bool = True):
+    
+    cell_ops = input_size * output_size
+    layer_ops = cell_ops * hidden_units if is_all_output else cell_ops
 
-oi = ops/ mem
-print("***Operation (Computational) Intensity***\n\#OI:", oi)
-
-
-muls = hiddenUnits*( m*( m+ n+ p))
-# mulPerDSP = 1 if bitWidth > 16 else int(36/bitWidth)
-print("Mul/DSP:", mulPerDSP)
-print("Mul: ", muls)
-
-dspEff = muls / (dsp * mulPerDSP*cc)
-print("DSP efficiency:", dspEff)
+    return layer_ops
 
 
-peakPerf = totalDSP * mulPerDSP * f * (10 ** (-9))
-print("(Computational Roof) Peak Performance: #GOPs/s", peakPerf)
+# Memory read by dense layer
+def mem_dense(input_size, output_size, bit_width):
+    
+    return (input_size * output_size + output_size) * bit_width / 8
 
 
-print("(I/O Bandwidth Roof): (GB/sec)", ioRoof)
+# If the model is many-to-one, the flag is set to false
+def writing_mem(output_size, hidden_units, bit_width, is_all_output: bool = True):
 
-rooflinePoint = min(peakPerf, oi * ioRoof)
-print("***Roofline Point***\nX: ", oi, ", Y:  ", gops * 10**(-9), ",  Roofline Point:  ", rooflinePoint)
+    mem_output = output_size * hidden_units if is_all_output else output_size
+    return mem_output * bit_width / 8
+
+
+def reading_mem(input_size, hidden_units, bit_width):
+
+    mem_input = input_size * hidden_units
+    return mem_input * bit_width / 8
+
+
+def cal_ops_mem(input_size, hidden_size, hidden_units, output_size, num_tests, bit_width, is_all_output):
+
+    model_op = num_ops_lstm(input_size, hidden_size, hidden_units)
+    model_op += num_ops_dense(input_size, output_size, hidden_units, is_all_output)
+
+    total_ops = num_tests * model_op
+
+    lstm_mem = mem_lstm(input_size, hidden_size, hidden_units, bit_width)
+    dense_mem = mem_dense (input_size, output_size, bit_width)
+    input_mem = num_tests * reading_mem(input_size, hidden_units, bit_width)
+    output_mem = num_tests * writing_mem(output_size, hidden_units, bit_width, is_all_output)
+
+    total_mem = lstm_mem + dense_mem + input_mem + output_mem
+
+    return total_ops, total_mem
+
+
+# Here's the details of the performance metric
+# Execution time = clock_cycle / frequency
+# GOPS = Total operations / Execution time
+# OPC = Total operations / clock_cycle
+# OI (Operation Intensity) = Total opertion / Total mem
+
+def compute_performance_metrics(model_name, op_nums, memory, frequency, clock_cycle, dsp_num, mul_per_dsp):
+    
+    perf = {}
+    perf['model'] = model_name
+    perf['GOPS'] = round((10**-9) * op_nums * frequency / clock_cycle, 3)
+    perf['OPC'] = round(op_nums / clock_cycle, 3)
+
+    perf['OI'] = round(op_nums / memory, 3)
+    perf['DSP_EFF'] = round(100 *op_nums / (dsp_num * mul_per_dsp * clock_cycle), 3)
+
+    perf['latency'] = round(clock_cycle / frequency, 5)
+
+    return perf
+
+
+def mnist_model():
+    input_size = 28
+    hidden_size = 32
+    hidden_units = 28
+    bit_width = 16
+    output_size = 10
+    is_all_output = False
+    num_tests = 10000
+
+    mnist_ops, mnist_mems = cal_ops_mem(input_size, hidden_size, hidden_units, output_size, num_tests, bit_width, is_all_output)
+
+    print("==================== Analyaing performance for MNIST dataset ====================")
+    print("* Number of Operations:", mnist_ops)
+    print("\n")
+    #For SHIR model:
+    clock_cycle = 15510921
+    frequency = 200 * (10**6)
+    dsp_num = 165
+    mul_per_dsp = 2
+    model_name = "SHIR-MNIST"
+    perf_shir = compute_performance_metrics(model_name, mnist_ops, mnist_mems, frequency, clock_cycle, dsp_num, mul_per_dsp)
+    print(perf_shir)
+
+    #For SHIR model:
+    clock_cycle = 21630000
+    frequency = 157 * (10**6)
+    dsp_num = 195
+    mul_per_dsp = 2
+    model_name = "HLS4ML-MNIST"
+    perf_hls4ml = compute_performance_metrics(model_name, mnist_ops, mnist_mems, frequency, clock_cycle, dsp_num, mul_per_dsp)
+    print(perf_hls4ml)
+    print("\n=================================================================================")
+
+mnist_model()

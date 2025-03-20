@@ -41,9 +41,9 @@ EPOCH = 10
 (x_train, y_train), (x_test, y_test) = mnist.load_data()
 
 # # Select a subset of 100 samples from the test set
-x_test, _, y_test, _ = train_test_split(
-    x_test, y_test, test_size=0.89, random_state=42, stratify=y_test
-)
+#x_test, _, y_test, _ = train_test_split(
+#     x_test, y_test, test_size=0.99, random_state=42, stratify=y_test
+# )
 
 print(f"x_test_subset shape: {x_test.shape}")
 print(f"y_test_subset shape: {y_test.shape}")

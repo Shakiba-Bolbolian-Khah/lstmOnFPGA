@@ -1,3 +1,12 @@
+import sys
+import os
+
+# Get the absolute path of the parent directory
+parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+
+# Add parent directory to sys.path
+sys.path.append(parent_dir)
+
 from fixedPointLStmWeight import *
 from fixedPointLStmWeight import SHIR_LSTM
 from tensorflow.keras.datasets import mnist, imdb
@@ -31,6 +40,7 @@ def plot(a, b=None):
 # fix random seed for reproducibility
 np.random.seed(9)
 OUTPUT_DIR = 'imdb/'
+glove_dir = '/home/skhah/hls4ml/'
 
 # Parameters
 num_words = 10000  # Top 10,000 words
@@ -66,7 +76,7 @@ print(f"Padded test data shape: {x_test.shape}")
 
 # Load GloVe embeddings (assuming glove.6B.100d.txt is downloaded)
 embedding_index = {}
-with open('glove.6B.100d.txt', encoding='utf-8') as f:
+with open(glove_dir + 'glove.6B.100d.txt', encoding='utf-8') as f:
     for line in f:
         values = line.split()
         word = values[0]
@@ -82,7 +92,6 @@ word_index["<PAD>"] = 0
 word_index["<START>"] = 1
 word_index["<UNK>"] = 2
 word_index["<UNUSED>"] = 3
-
 
 # Create embedding matrix
 embedding_matrix = np.zeros((num_words, embedding_dim))
@@ -103,34 +112,36 @@ embedding_model = Sequential([
 ], name='embedding_model')
 embedding_model.summary()
 
-
-# Model 2: LSTM Classifier Model
-input_shape = (max_length, embedding_dim)  # Input shape from embedding output
-inputs = Input(shape=input_shape, name='input_layer')
-x = LSTM(128, name='lstm1')(inputs)
-x = Dropout(0.2, name='dropout')(x)
-outputs = Dense(1, activation='sigmoid', name='output')(x)
-model = Model(inputs=inputs, outputs=outputs, name='lstm_classifier')
-model.summary()
-
-# Compile the LSTM model
-optimizer = Adam(learning_rate=0.001)  # Explicit learning rate
-model.compile(loss='binary_crossentropy', optimizer=optimizer, metrics=['accuracy'])
-
 # Generate embedded training and test data using the embedding model
 x_train_embedded = embedding_model.predict(x_train)
 x_test_embedded = embedding_model.predict(x_test)
 print(f"Embedded training data shape: {x_train_embedded.shape}")
 print(f"Embedded test data shape: {x_test_embedded.shape}")
 
-# Define callbacks
-early_stopping = EarlyStopping(
-    monitor='val_accuracy',  # Monitor validation accuracy
-    patience=5,              # Stop after 3 epochs without improvement
-    mode='max',              # Maximize accuracy
-    restore_best_weights=True  # Restore weights from best epoch
-)
 
+# Fix input shape for LSTM
+# Ensure data is 3D (batch_size, timesteps, features)
+x_train_embedded = np.reshape(x_train_embedded, (x_train_embedded.shape[0], max_length, embedding_dim))
+x_test_embedded = np.reshape(x_test_embedded, (x_test_embedded.shape[0], max_length, embedding_dim))
+
+# Model 2: LSTM Model
+model = Sequential()
+model.add(LSTM(128, input_shape=(max_length, embedding_dim), name='lstm1'))
+model.add(Dropout(0.2, name='dropout'))
+model.add(Dense(1, activation='sigmoid', name='output'))
+
+# Compile the model
+optimizer = Adam(learning_rate=0.001)
+model.compile(loss='binary_crossentropy', optimizer=optimizer, metrics=['accuracy'])
+model.summary()
+
+# Define Callbacks
+early_stopping = EarlyStopping(
+    monitor='val_accuracy', 
+    patience=5,  
+    mode='max',  
+    restore_best_weights=True  
+)
 checkpoint = ModelCheckpoint(
     'best_imdb_model.h5',    # Save best model to HDF5 file
     monitor='val_accuracy',  # Save based on val_accuracy

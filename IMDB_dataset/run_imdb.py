@@ -1,3 +1,12 @@
+import sys
+import os
+
+# Get the absolute path of the parent directory
+parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+
+# Add parent directory to sys.path
+sys.path.append(parent_dir)
+
 from fixedPointLStmWeight import *
 from fixedPointLStmWeight import SHIR_LSTM
 from tensorflow.keras.datasets import mnist, imdb
@@ -41,7 +50,7 @@ n_classes = 2
 # Select a subset of 100 samples from the test set
 
 x_test, _, y_test, _ = train_test_split(
-    x_test, y_test, test_size=25000-10000, random_state=42, stratify=y_test
+    x_test, y_test, test_size=25000-1000, random_state=42, stratify=y_test
 )
 
 print(f"x_test_subset shape: {x_test.shape}")
@@ -89,12 +98,19 @@ embedding_model = Sequential([
 ], name='embedding_model')
 embedding_model.summary()
 
-# Generate embedded training and test data using the embedding model
 x_test_embedded = embedding_model.predict(x_test)
 print(f"Embedded test data shape: {x_test_embedded.shape}")
 
-# quantize_input(x_test_embedded, n_input, 'x', OUTPUT_DIR)
-# quantize_matrix(y_test, 'y_test', OUTPUT_DIR, quantize = False, need_transpose = False)
+
+# Fix input shape for LSTM
+# Ensure data is 3D (batch_size, timesteps, features)
+x_test_embedded = np.reshape(x_test_embedded, (x_test_embedded.shape[0], max_length, embedding_dim))
+
+
+print(f"Embedded test data shape: {x_test_embedded.shape}")
+
+quantize_input(x_test_embedded, n_input, 'x', OUTPUT_DIR)
+quantize_matrix(y_test, 'y_test', OUTPUT_DIR, quantize = False, need_transpose = False)
 
 
 lstm = SHIR_LSTM(100,128,200,1)

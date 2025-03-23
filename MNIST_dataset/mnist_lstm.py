@@ -1,3 +1,12 @@
+import sys
+import os
+
+# Get the absolute path of the parent directory
+parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+
+# Add parent directory to sys.path
+sys.path.append(parent_dir)
+
 from fixedPointLStmWeight import *
 from fixedPointLStmWeight import SHIR_LSTM
 from tensorflow.keras.datasets import mnist

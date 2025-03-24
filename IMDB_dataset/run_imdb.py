@@ -31,6 +31,7 @@ from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
 # fix random seed for reproducibility
 np.random.seed(9)
 OUTPUT_DIR = 'imdb/'
+glove_dir = '/home/skhah/hls4ml/'
 
 # Parameters
 num_words = 10000  # Top 10,000 words
@@ -63,7 +64,7 @@ print(f"Padded test data shape: {x_test.shape}")
 
 # Load GloVe embeddings (assuming glove.6B.100d.txt is downloaded)
 embedding_index = {}
-with open('glove.6B.100d.txt', encoding='utf-8') as f:
+with open(glove_dir + 'glove.6B.100d.txt', encoding='utf-8') as f:
     for line in f:
         values = line.split()
         word = values[0]
@@ -110,7 +111,7 @@ x_test_embedded = np.reshape(x_test_embedded, (x_test_embedded.shape[0], max_len
 print(f"Embedded test data shape: {x_test_embedded.shape}")
 
 quantize_input(x_test_embedded, n_input, 'x', OUTPUT_DIR)
-quantize_matrix(y_test, 'y_test', OUTPUT_DIR, quantize = False, need_transpose = False)
+quantize_matrix(y_test.astype(np.int32), 'y_test', OUTPUT_DIR, quantize = False, need_transpose = False)
 
 
 lstm = SHIR_LSTM(100,128,200,1)

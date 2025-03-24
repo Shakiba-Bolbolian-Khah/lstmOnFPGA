@@ -1,14 +1,3 @@
-import sys
-import os
-
-# Get the absolute path of the parent directory
-parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-
-# Add parent directory to sys.path
-sys.path.append(parent_dir)
-
-from fixedPointLStmWeight import *
-from fixedPointLStmWeight import SHIR_LSTM
 from tensorflow.keras.datasets import mnist, imdb
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.models import Sequential, load_model, Model
@@ -25,27 +14,31 @@ import tensorflow as tf
 #from model import mnist_lstm
 import matplotlib.pyplot as plt
 import numpy as np
+# import plotting
 from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
+import hls4ml
 
 
 
-
-def plot(a, b=None):
-    plt.plot(a, label='a')
-    if b is not None:
-        plt.plot(b, label='b')
-    plt.legend()
-    plt.show()
+# def plot(a, b=None):
+#     plt.plot(a, label='a')
+#     if b is not None:
+#         plt.plot(b, label='b')
+#     plt.legend()
+#     plt.show()
 
 # fix random seed for reproducibility
 np.random.seed(9)
-OUTPUT_DIR = 'imdb/'
-glove_dir = '/home/skhah/hls4ml/'
+OUTPUT_DIR = 'rnn_hls4ml/hls4ml_prj/'
+glove_dir =  '/home/skhah/hls4ml/'
+# '/home/shakiba/Documents/Lab_Works/Scripts/IMDB_dataset/'
+# '/home/skhah/hls4ml/'
+
 
 # Parameters
 num_words = 10000  # Top 10,000 words
 max_length = 200   # Pad/truncate reviews to 200 words
-embedding_dim = 100  # GloVe 100D vectors -> 50
+embedding_dim = 100  # GloVe 100D vectors
 
 # input dimension 
 n_input = 100
@@ -64,9 +57,10 @@ print(f"Training data shape of y: {y_train.shape}")
 print(f"Test data shape of x: {x_test.shape}")
 
 
-# x_test, _, y_test, _ = train_test_split(
-#     x_test, y_test, test_size=0.99, random_state=42, stratify=y_test
-# )
+
+x_test, _, y_test, _ = train_test_split(
+    x_test, y_test, test_size=25000 - 1000, random_state=42, stratify=y_test
+)
 
 # Pad sequences
 x_train = pad_sequences(x_train, maxlen=max_length)
@@ -76,7 +70,7 @@ print(f"Padded test data shape: {x_test.shape}")
 
 # Load GloVe embeddings (assuming glove.6B.100d.txt is downloaded)
 embedding_index = {}
-with open(glove_dir + 'glove.6B.100d.txt', encoding='utf-8') as f: #-> 50d
+with open(glove_dir + 'glove.6B.100d.txt', encoding='utf-8') as f:
     for line in f:
         values = line.split()
         word = values[0]
@@ -92,6 +86,7 @@ word_index["<PAD>"] = 0
 word_index["<START>"] = 1
 word_index["<UNK>"] = 2
 word_index["<UNUSED>"] = 3
+
 
 # Create embedding matrix
 embedding_matrix = np.zeros((num_words, embedding_dim))
@@ -126,7 +121,7 @@ x_test_embedded = np.reshape(x_test_embedded, (x_test_embedded.shape[0], max_len
 
 # Model 2: LSTM Model
 model = Sequential()
-model.add(LSTM(128, input_shape=(max_length, embedding_dim), name='lstm1')) #-> 64 = h
+model.add(LSTM(128, input_shape=(max_length, embedding_dim), name='lstm1'))
 model.add(Dropout(0.2, name='dropout'))
 model.add(Dense(1, activation='sigmoid', name='output'))
 
@@ -164,47 +159,58 @@ model.fit(
 test_loss, test_accuracy = model.evaluate(x_test_embedded, y_test)
 print(f'Test accuracy: {test_accuracy:.4f}')
 
-# model.save('imdb_final_model.h5')  # Entire model
-# model.save_weights('imdb_final_lstm_weights.weights.h5')  # Weights only
-# print("Final model and weights saved")
+model.save('imdb_final_model.h5')  # Entire model
+model.save_weights('imdb_final_lstm_weights.weights.h5')  # Weights only
+print("Final model and weights saved")
 
 
-# ============================= Storing Weight Matrices for SHIR implementation =====
+# ============================== HLS4ML ==============================================
+config = hls4ml.utils.config_from_keras_model(model, granularity='model', default_precision='fixed<16,6>')
+# print(config)
+# print("Config-----------------------------------")
+# plotting.print_dict(config)
+# print("-----------------------------------------")
 
-lstm_layer = model.get_layer('lstm1')
-kernel, recurrent_kernel, bias = lstm_layer.get_weights()
+hls_model = hls4ml.converters.convert_from_keras_model(
+         model,
+         hls_config=config,
+         output_dir='rnn_hls4ml/hls4ml_prj',
+         backend = 'Quartus',
+         part='10AX115N2F40E2LG',
+         clock_period = 5)
+         #part='xcku115-flvb2104-2-')
+         #part='xcu250-figd2104-2L-e')
 
-print('kernel:', kernel.shape)
 
-units = lstm_layer.units  # In your model, this is 100
+hls_model.compile()
 
-weights = {}
+# ============================== Storing Test Data ====================================
 
-biases = {}
 
-# Split the kernel into four parts (each of shape: (input_dim, units))
-weights['wi'], weights['wf'], weights['wc'], weights['wo'] = np.split(kernel, 4, axis=1)
+# Save as .npy (if needed later)
+np.save(OUTPUT_DIR+"tb_data/inputs.npy", x_test)
+np.save(OUTPUT_DIR+"tb_data/outputs.npy", y_test)
 
-# Split the recurrent kernel into four parts (each of shape: (units, units))
-weights['ui'], weights['uf'], weights['uc'], weights['uo'] = np.split(recurrent_kernel, 4, axis=1)
+# Convert to .dat format (required for io_parallel mode)
+with open(OUTPUT_DIR+"tb_data/tb_input_features.dat", "w") as f:
+    for row in x_test.reshape(x_test.shape[0], -1):  # Flatten if necessary
+        f.write(" ".join(map(str, row)) + "\n")
 
-# Split the bias vector into four parts (each of shape: (units,))
-biases['bi'], biases['bf'], biases['bc'], biases['bo'] = np.split(bias, 4)
+with open(OUTPUT_DIR+"tb_data/tb_output_predictions.dat", "w") as f:
+    for row in y_test.reshape(y_test.shape[0], -1):  # Flatten if necessary
+        f.write(" ".join(map(str, row)) + "\n")
 
-# Now you have the weights for each gate:
-print("Input Gate Kernel shape:", weights['wi'].shape)
-print("Forget Gate Recurrent Kernel shape:", weights['ui'].shape)
-print("Cell Gate Bias shape:", biases['bi'].shape)
+# ============================== Predicting and Building the Model======================
 
-for weight in weights:
-    quantize_matrix(weights[weight], weight, OUTPUT_DIR)
+y_keras = model.predict(np.ascontiguousarray(x_test_embedded))
+y_hls = hls_model.predict(np.ascontiguousarray(x_test_embedded))
 
-for b in biases: 
-    quantize_matrix(biases[b].reshape(units,1), b, OUTPUT_DIR)
-    
-dense_layer = model.get_layer('output')
-dense_kernel, dense_bias = dense_layer.get_weights()
+y_keras_labels = (y_keras >= 0.5).astype(int)
+y_hls_labels = (y_hls >= 0.5).astype(int)
 
-quantize_matrix(dense_kernel, "wd", OUTPUT_DIR)
-quantize_matrix(dense_bias, "bd", OUTPUT_DIR)
+print("Keras  Accuracy: {}".format(accuracy_score(y_test, y_keras_labels)))
+print("hls4ml  Accuracy: {}".format(accuracy_score(y_test, y_hls_labels)))
+
+# hls_model.build(synth=True, fpgasynth=True, log_level=1, cont_if_large_area=True)
+
 

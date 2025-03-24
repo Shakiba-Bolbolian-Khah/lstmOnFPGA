@@ -260,9 +260,19 @@ class SHIR_LSTM:
 
         np.savetxt(dir + 'state' + '.csv', np.concatenate([self.h0, self.c0]).T.astype(int_type(BIT_WIDTH)), fmt='%i', delimiter=',')
 
-    def load_dense_layer(self, dir):
-        self.wd = load_matrix("wd", dir)
-        self.bd = load_matrix("bd", dir).reshape(self.output_size,)
+    def load_dense_layer(self, dir, num = 1):
+        self.wd = {}
+        self.bd = {}
+        if num != 1:
+            for i in range(num):
+                new_name = str(i + 1)
+
+                self.wd[new_name] = load_matrix("wd"+new_name, dir)
+                self.bd[new_name] = load_matrix("bd"+new_name, dir).reshape(-1,)
+        else:
+            new_name = '1'
+            self.wd[new_name] = load_matrix("wd", dir)
+            self.bd[new_name] = load_matrix("bd", dir).reshape(-1,)
 
 
     def generate_input(self):
@@ -303,8 +313,8 @@ class SHIR_LSTM:
         # np.savetxt(DIR + 'y.csv', y.astype(int_type(BIT_WIDTH)), fmt='%i', delimiter=',')
         return y
 
-    def run_dense(self, item, activation = "none"):
-        output = fixed_add(fixed_matvec_numpy(self.wd, item), self.bd)
+    def run_dense(self, item, num = '1', activation = "none"):
+        output = fixed_add(fixed_matvec_numpy(self.wd[num], item), self.bd[num])
         if activation == "none":
             return output
         elif activation =="sigmoid":
@@ -332,4 +342,26 @@ class SHIR_LSTM:
         y = np.array(y)
         if is_input_file:
             np.savetxt(dir + 'y.csv', y.astype(int_type(BIT_WIDTH)), fmt='%i', delimiter=',')
+        return(y)
+    
+    def run_two_dense(self, dir, test_for_accuracy = False):
+        self.load_weights(dir)
+        self.load_biases(dir)
+        self.generate_initial_state(dir)
+        self.load_dense_layer(dir, 2)
+        self.load_input(dir)
+
+        print(self.x.shape)
+
+        y = []
+        for item in self.x:
+            lstm = self.run_inference(item, False, True)
+            dense1 = self.run_dense(lstm, '1')
+            dense2 = self.run_dense(dense1, '2')
+
+            y+= [dense2]
+        
+        print(type(y[0]))
+        y = np.array(y)
+        np.savetxt(dir + 'y.csv', y.astype(int_type(BIT_WIDTH)), fmt='%i', delimiter=',')
         return(y)

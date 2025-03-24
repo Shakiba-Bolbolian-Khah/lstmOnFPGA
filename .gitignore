@@ -2,3 +2,9 @@ data/
 mnist/
 imdb/
 glove.6B.100d.txt
+flight/
+speech/
+mini_speech_commands/
+mini_speech_commands_kaggle/
+Data_TwoPatterns/
+twopattern/

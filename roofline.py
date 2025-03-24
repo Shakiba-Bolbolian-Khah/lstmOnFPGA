@@ -103,7 +103,7 @@ def mnist_model():
     print("* Number of Operations:", mnist_ops)
     print("\n")
     #For SHIR model:
-    clock_cycle = 15510921
+    clock_cycle = 23480000 #15510921
     frequency = 200 * (10**6)
     dsp_num = 165
     mul_per_dsp = 2
@@ -122,3 +122,38 @@ def mnist_model():
     print("\n=================================================================================")
 
 mnist_model()
+
+def imdb_model():
+    input_size = 100
+    hidden_size = 128
+    hidden_units = 200
+    bit_width = 16
+    output_size = 1
+    is_all_output = False
+    num_tests = 1000
+
+    imdb_ops, imdb_mems = cal_ops_mem(input_size, hidden_size, hidden_units, output_size, num_tests, bit_width, is_all_output)
+
+    print("==================== Analyaing performance for IMDB dataset ====================")
+    print("* Number of Operations:", imdb_ops)
+    print("\n")
+    #For SHIR model:
+    clock_cycle = 30585000 #15510921
+    frequency = 200 * (10**6)
+    dsp_num = 601
+    mul_per_dsp = 2
+    model_name = "SHIR-IMDB"
+    perf_shir = compute_performance_metrics(model_name, imdb_ops, imdb_mems, frequency, clock_cycle, dsp_num, mul_per_dsp)
+    print(perf_shir)
+
+    #For SHIR model:
+    clock_cycle = 21630000
+    frequency = 157 * (10**6)
+    dsp_num = 195
+    mul_per_dsp = 2
+    model_name = "HLS4ML-IMDB"
+    perf_hls4ml = compute_performance_metrics(model_name, imdb_ops, imdb_mems, frequency, clock_cycle, dsp_num, mul_per_dsp)
+    print(perf_hls4ml)
+    print("\n=================================================================================")
+
+imdb_model()

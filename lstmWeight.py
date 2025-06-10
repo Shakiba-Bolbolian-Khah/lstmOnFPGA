@@ -3,16 +3,16 @@ import numpy as np
 import csv
 
 
-hiddenSize = 4
-inputSize = 4
-outputSize = 4
+hiddenSize = 16
+inputSize = 8
+outputSize = 16
 length = 3
 seqLength = 1
-parDeg = 2
+parDeg = 4
 min = 0
 max = 2
 fileLoc = 'data/'
-fraction = 3
+fraction = 10
 quantization = 2**fraction
 bitwidth = 16
 
@@ -168,25 +168,25 @@ uf = np.eye(hiddenSize, hiddenSize) #np.random.randint(min,max,size=(hiddenSize,
 np.savetxt(fileLoc + 'uf.csv', uf.astype(np.int16), fmt='%i', delimiter=',')
 
 uf2 = np.reshape(uf, (hiddenSize//parDeg, hiddenSize*parDeg))
-np.savetxt(fileLoc + 'uf2.csv', uf2.astype(np.int16), fmt='%i', delimiter=',')
+np.savetxt(fileLoc + 'uf'+str(parDeg)+'.csv', uf2.astype(np.int16), fmt='%i', delimiter=',')
 
 ui = np.eye(hiddenSize, hiddenSize) #np.random.randint(min,max,size=(hiddenSize, hiddenSize))
 np.savetxt(fileLoc + 'ui.csv', ui.astype(np.int16), fmt='%i', delimiter=',')
 
 ui2 = np.reshape(ui, (hiddenSize//parDeg, hiddenSize*parDeg))
-np.savetxt(fileLoc + 'ui2.csv', ui2.astype(np.int16), fmt='%i', delimiter=',')
+np.savetxt(fileLoc + 'ui'+str(parDeg)+'.csv', ui2.astype(np.int16), fmt='%i', delimiter=',')
 
 uo = np.eye(hiddenSize, hiddenSize) #np.random.randint(min,max,size=(hiddenSize, hiddenSize))
 np.savetxt(fileLoc + 'uo.csv', uo.astype(np.int16), fmt='%i', delimiter=',')
 
 uo2 = np.reshape(uo, (hiddenSize//parDeg, hiddenSize*parDeg))
-np.savetxt(fileLoc + 'uo2.csv', uo2.astype(np.int16), fmt='%i', delimiter=',')
+np.savetxt(fileLoc + 'uo'+str(parDeg)+'.csv', uo2.astype(np.int16), fmt='%i', delimiter=',')
 
 uc = np.eye(hiddenSize, hiddenSize) #np.random.randint(min,max,size=(hiddenSize, hiddenSize))
 np.savetxt(fileLoc + 'uc.csv', uc.astype(np.int16), fmt='%i', delimiter=',')
 
 uc2 = np.reshape(uc, (hiddenSize//parDeg, hiddenSize*parDeg))
-np.savetxt(fileLoc + 'uc2.csv', uc2.astype(np.int16), fmt='%i', delimiter=',')
+np.savetxt(fileLoc + 'uc'+str(parDeg)+'.csv', uc2.astype(np.int16), fmt='%i', delimiter=',')
 
 
 # np.zeros((hiddenSize,inputSize))
@@ -198,25 +198,25 @@ wf = np.eye(hiddenSize, inputSize) #np.random.randint(min,max,size=(hiddenSize, 
 np.savetxt(fileLoc + 'wf.csv', wf.astype(np.int16), fmt='%i', delimiter=',')
 
 wf2 = np.reshape(wf, (hiddenSize//parDeg, inputSize*parDeg))
-np.savetxt(fileLoc + 'wf2.csv', wf2.astype(np.int16), fmt='%i', delimiter=',')
+np.savetxt(fileLoc + 'wf'+str(parDeg)+'.csv', wf2.astype(np.int16), fmt='%i', delimiter=',')
 
 wi = np.eye(hiddenSize, inputSize) #np.random.randint(min,max,size=(hiddenSize, inputSize))
 np.savetxt(fileLoc + 'wi.csv', wi.astype(np.int16), fmt='%i', delimiter=',')
 
 wi2 = np.reshape(wi, (hiddenSize//parDeg, inputSize*parDeg))
-np.savetxt(fileLoc + 'wi2.csv', wi2.astype(np.int16), fmt='%i', delimiter=',')
+np.savetxt(fileLoc + 'wi'+str(parDeg)+'.csv', wi2.astype(np.int16), fmt='%i', delimiter=',')
 
 wo = np.eye(hiddenSize, inputSize) #np.random.randint(min,max,size=(hiddenSize, inputSize))
 np.savetxt(fileLoc + 'wo.csv', wo.astype(np.int16), fmt='%i', delimiter=',')
 
 wo2 = np.reshape(wo, (hiddenSize//parDeg, inputSize*parDeg))
-np.savetxt(fileLoc + 'wo2.csv', wo2.astype(np.int16), fmt='%i', delimiter=',')
+np.savetxt(fileLoc + 'wo'+str(parDeg)+'.csv', wo2.astype(np.int16), fmt='%i', delimiter=',')
 
 wc = np.eye(hiddenSize, inputSize) #np.random.randint(min,max,size=(hiddenSize, inputSize))
 np.savetxt(fileLoc + 'wc.csv', wc.astype(np.int16), fmt='%i', delimiter=',')
 
 wc2 = np.reshape(wc, (hiddenSize//parDeg, inputSize*parDeg))
-np.savetxt(fileLoc + 'wc2.csv', wc2.astype(np.int16), fmt='%i', delimiter=',')
+np.savetxt(fileLoc + 'wc'+str(parDeg)+'.csv', wc2.astype(np.int16), fmt='%i', delimiter=',')
 
 
 wy = np.eye(outputSize, hiddenSize)
@@ -243,7 +243,7 @@ np.savetxt(fileLoc + 'state.csv', np.concatenate([h0,c0]).T.astype(np.int16), fm
 np.savetxt(fileLoc + 'stateOut.csv', np.concatenate([h0]).astype(np.int16), fmt='%i', delimiter=',')
 
 
-x =  -1*np.ones((length,inputSize), dtype=np.int16) #np.random.randint(0,2,size=(length,inputSize))
+x =  np.random.randint(-16,16,size=(length,inputSize))
 # nnp.eye(length,inputSize, dtype=np.int16) 
 # np.ones((length,inputSize), dtype=np.int16) 
 # np.array([[j for i in range(inputSize)] for j in range(length)])

@@ -210,14 +210,18 @@ quantize_matrix(dense_kernel2, "wd2", OUTPUT_DIR)
 quantize_matrix(dense_bias2, "bd2", OUTPUT_DIR)
 
 
-quantize_input(x_test, n_features, 'x_test', OUTPUT_DIR)
-quantize_matrix(y_test, 'y_test', OUTPUT_DIR, need_transpose = False)
+quantize_input(x_test, n_features, 'x', OUTPUT_DIR)
+quantize_matrix(y_test, 'y_label', OUTPUT_DIR, need_transpose = False, quantize= False)
 
 
-x_test8, _, y_test8, _ = train_test_split(
-    x_test, y_test, test_size=1600-8, random_state=42, stratify=y_test
-)
+# quantize_input(x_test, n_features, 'x_test', OUTPUT_DIR)
+# quantize_matrix(y_test, 'y_test', OUTPUT_DIR, need_transpose = False)
 
-quantize_input(x_test8, n_features, 'x', OUTPUT_DIR)
-quantize_matrix(y_test8, 'y_label', OUTPUT_DIR, need_transpose = False)
+
+# x_test8, _, y_test8, _ = train_test_split(
+#     x_test, y_test, test_size=1600-8, random_state=42, stratify=y_test
+# )
+
+# quantize_input(x_test8, n_features, 'x', OUTPUT_DIR)
+# quantize_matrix(y_test8, 'y_label', OUTPUT_DIR, need_transpose = False)
 

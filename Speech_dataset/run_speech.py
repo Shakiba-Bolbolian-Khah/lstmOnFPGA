@@ -28,6 +28,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
 
+from sklearn.metrics import confusion_matrix, classification_report, roc_curve, auc
+
+
+commands = ['yes', 'no', 'up', 'down', 'left', 'right', 'stop', 'go']
 
 # Set random seed for reproducibility
 tf.random.set_seed(42)
@@ -42,14 +46,21 @@ epochs = 100
 
 OUTPUT_DIR = 'speech/'
 
+y_test = []
 
+with open(OUTPUT_DIR + "y_label" +'.csv', 'r') as f:
+        reader = csv.reader(f)
+        data = list(reader)
+        y_test = np.array(data, dtype= np.float32).astype(np.int32)
 
 # quantize_input('x_test', n_features, 'x', OUTPUT_DIR)
-y_test = load_matrix("y_label", OUTPUT_DIR)
+# y_test = load_matrix("y_label", OUTPUT_DIR, quantize=False).astype(int)
 
 lstm = SHIR_LSTM(n_features,64,timesteps, n_classes)
 y = lstm.run_two_dense(OUTPUT_DIR)
 
 y_pred_labels = np.argmax(y, axis=1)
+# y_test = np.argmax(y_test, axis=1)
 
 print("SHIR  Accuracy: {}".format(accuracy_score(y_test, y_pred_labels)))
+print(classification_report(y_test, y_pred_labels, target_names=commands))

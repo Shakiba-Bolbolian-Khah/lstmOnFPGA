@@ -35,7 +35,7 @@ OUTPUT_DIR = 'twopattern/'
 
 # Load Two_Patterns dataset (assumes downloaded from UCR and placed in 'UCR_Two_Patterns/')
 def load_two_patterns_data():
-    base_path = 'Data_TwoPatterns/'
+    base_path = './Data_TwoPatterns/'
     header_lines = 15  # 7 comment lines + 8 metadata lines including @data
 
     # Helper function to parse rows with [t1,t2,...,t128:label] format
@@ -166,5 +166,5 @@ quantize_matrix(dense_kernel2, "wd2", OUTPUT_DIR)
 quantize_matrix(dense_bias2, "bd2", OUTPUT_DIR)
 
 
-quantize_input(x_test, 1, 'x_test', OUTPUT_DIR)
-quantize_matrix(y_test, 'y_test', OUTPUT_DIR, need_transpose = False)
+quantize_input(x_test, 1, 'x', OUTPUT_DIR)
+quantize_matrix(y_test, 'y_label', OUTPUT_DIR, need_transpose = False, quantize=False)

@@ -40,7 +40,7 @@ def mem_dense(input_size, output_size, bit_width):
 # If the model is many-to-one, the flag is set to false
 def writing_mem(output_size, hidden_units, bit_width, is_all_output: bool = True):
 
-    mem_output = output_size * hidden_units if is_all_output else output_size
+    mem_output = output_size[-1] * hidden_units if is_all_output else output_size[-1]
     return mem_output * bit_width / 8
 
 
@@ -53,12 +53,22 @@ def reading_mem(input_size, hidden_units, bit_width):
 def cal_ops_mem(input_size, hidden_size, hidden_units, output_size, num_tests, bit_width, is_all_output):
 
     model_op = num_ops_lstm(input_size, hidden_size, hidden_units)
-    model_op += num_ops_dense(input_size, output_size, hidden_units, is_all_output)
+    model_op += num_ops_dense(input_size, output_size[0], hidden_units, is_all_output)
+
+    if(len(output_size) > 1):
+        for i in range(1, len(output_size)):
+            model_op += num_ops_dense(output_size[i-1], output_size[i], hidden_units, is_all_output)
+
 
     total_ops = num_tests * model_op
 
     lstm_mem = mem_lstm(input_size, hidden_size, hidden_units, bit_width)
-    dense_mem = mem_dense (input_size, output_size, bit_width)
+    dense_mem = mem_dense(input_size, output_size[0], bit_width)
+    
+    if(len(output_size) > 1):
+        for i in range(1, len(output_size)):
+            dense_mem += mem_dense(output_size[i-1], output_size[i], bit_width)
+
     input_mem = num_tests * reading_mem(input_size, hidden_units, bit_width)
     output_mem = num_tests * writing_mem(output_size, hidden_units, bit_width, is_all_output)
 
@@ -80,12 +90,69 @@ def compute_performance_metrics(model_name, op_nums, memory, frequency, clock_cy
     perf['GOPS'] = round((10**-9) * op_nums * frequency / clock_cycle, 3)
     perf['OPC'] = round(op_nums / clock_cycle, 3)
 
-    perf['OI'] = round(op_nums / memory, 3)
-    perf['DSP_EFF'] = round(100 *op_nums / (dsp_num * mul_per_dsp * clock_cycle), 3)
-
     perf['latency'] = round(clock_cycle / frequency, 5)
+    
+    perf['OI'] = round(op_nums / memory, 3)
+    perf['DSP_EFF'] = round(op_nums / (dsp_num * mul_per_dsp * clock_cycle), 3)
+    round(perf['OPC']/dsp_num,3)
+
 
     return perf
+
+def twopatt_model():
+    input_size = 1
+    hidden_size = 32
+    hidden_units = 128
+    bit_width = 16
+    output_size = [16, 4]
+    is_all_output = False
+    num_tests = 4000
+
+    twopatt_ops, twopatt_mems = cal_ops_mem(input_size, hidden_size, hidden_units, output_size, num_tests, bit_width, is_all_output)
+
+    print("==================== Analyaing performance for Two Patt dataset ====================")
+    print("* Number of Operations:", twopatt_ops)
+    print("\n")
+    #For SHIR model:
+    clock_cycle = 28423160 #15510921
+    frequency = 200 * (10**6)
+    dsp_num = 119
+    mul_per_dsp = 2
+    model_name = "SHIR-twopatt-normalMVM-DP/Cyc1"
+    perf_shir = compute_performance_metrics(model_name, twopatt_ops, twopatt_mems, frequency, clock_cycle, dsp_num, mul_per_dsp)
+    print(perf_shir)
+
+    #For SHIR model:
+    clock_cycle = 20231425 #15510921
+    frequency = 200 * (10**6)
+    dsp_num = 198
+    mul_per_dsp = 2
+    model_name = "SHIR-twopatt-fractional-DP/Cyc2"
+    perf_shir = compute_performance_metrics(model_name, twopatt_ops, twopatt_mems, frequency, clock_cycle, dsp_num, mul_per_dsp)
+    print(perf_shir)
+
+    #For SHIR model:
+    clock_cycle = 16135106 #15510921
+    frequency = 200 * (10**6)
+    dsp_num = 356
+    mul_per_dsp = 2
+    model_name = "SHIR-twopatt-fractional-DP/Cyc4"
+    perf_shir = compute_performance_metrics(model_name, twopatt_ops, twopatt_mems, frequency, clock_cycle, dsp_num, mul_per_dsp)
+    print(perf_shir)
+
+
+    #For hls4ml model:
+    clock_cycle = 21020011
+    frequency = 50 * (10**6)
+    dsp_num = 129
+    mul_per_dsp = 2
+    model_name = "HLS4ML-twopatt"
+    perf_hls4ml = compute_performance_metrics(model_name, twopatt_ops, twopatt_mems, frequency, clock_cycle, dsp_num, mul_per_dsp)
+    print(perf_hls4ml)
+    print("\n=================================================================================")
+
+twopatt_model()
+
 
 
 def mnist_model():
@@ -93,7 +160,7 @@ def mnist_model():
     hidden_size = 32
     hidden_units = 28
     bit_width = 16
-    output_size = 10
+    output_size = [10]
     is_all_output = False
     num_tests = 10000
 
@@ -103,15 +170,35 @@ def mnist_model():
     print("* Number of Operations:", mnist_ops)
     print("\n")
     #For SHIR model:
-    clock_cycle = 23480000 #15510921
+    clock_cycle = 28613705 #15510921
     frequency = 200 * (10**6)
     dsp_num = 165
     mul_per_dsp = 2
-    model_name = "SHIR-MNIST"
+    model_name = "SHIR-MNIST-normalMVM-DP/Cyc1"
     perf_shir = compute_performance_metrics(model_name, mnist_ops, mnist_mems, frequency, clock_cycle, dsp_num, mul_per_dsp)
     print(perf_shir)
 
     #For SHIR model:
+    clock_cycle = 26003067 #15510921
+    frequency = 200 * (10**6)
+    dsp_num = 314
+    mul_per_dsp = 2
+    model_name = "SHIR-MNIST-fractional-DP/Cyc2"
+    perf_shir = compute_performance_metrics(model_name, mnist_ops, mnist_mems, frequency, clock_cycle, dsp_num, mul_per_dsp)
+    print(perf_shir)
+
+
+    #For SHIR model:
+    clock_cycle = 25694360 #15510921
+    frequency = 200 * (10**6)
+    dsp_num = 564
+    mul_per_dsp = 2
+    model_name = "SHIR-MNIST-fractional-DP/Cyc4"
+    perf_shir = compute_performance_metrics(model_name, mnist_ops, mnist_mems, frequency, clock_cycle, dsp_num, mul_per_dsp)
+    print(perf_shir)
+
+
+    # #For hls4ml model:
     clock_cycle = 21630000
     frequency = 157 * (10**6)
     dsp_num = 195
@@ -123,12 +210,69 @@ def mnist_model():
 
 mnist_model()
 
+
+
+def speech_model():
+    input_size = 13
+    hidden_size = 64
+    hidden_units = 32
+    bit_width = 16
+    output_size = [32, 8]
+    is_all_output = False
+    num_tests = 1600
+
+    speech_ops, speech_mems = cal_ops_mem(input_size, hidden_size, hidden_units, output_size, num_tests, bit_width, is_all_output)
+
+    print("==================== Analyaing performance for Speech dataset ====================")
+    print("* Number of Operations:", speech_ops)
+    print("\n")
+    #For SHIR model:
+    clock_cycle = 6620182 #15510921
+    frequency = 200 * (10**6)
+    dsp_num = 247
+    mul_per_dsp = 2
+    model_name = "SHIR-speech-normalMVM-DP/Cyc1"
+    perf_shir = compute_performance_metrics(model_name, speech_ops, speech_mems, frequency, clock_cycle, dsp_num, mul_per_dsp)
+    print(perf_shir)
+
+    #For SHIR model:
+    clock_cycle = 5284108 #15510921
+    frequency = 200 * (10**6)
+    dsp_num = 433
+    mul_per_dsp = 2
+    model_name = "SHIR-speech-fractional-DP/Cyc2"
+    perf_shir = compute_performance_metrics(model_name, speech_ops, speech_mems, frequency, clock_cycle, dsp_num, mul_per_dsp)
+    print(perf_shir)
+
+    #For SHIR model:
+    clock_cycle = 5177058 #15510921
+    frequency = 200 * (10**6)
+    dsp_num = 748
+    mul_per_dsp = 2
+    model_name = "SHIR-speech-fractional-DP/Cyc4"
+    perf_shir = compute_performance_metrics(model_name, speech_ops, speech_mems, frequency, clock_cycle, dsp_num, mul_per_dsp)
+    print(perf_shir)
+
+    #For hls4ml model:
+    # clock_cycle = 0
+    # frequency = 50 * (10**6)
+    # dsp_num = 129
+    # mul_per_dsp = 2
+    # model_name = "HLS4ML-speech"
+    # perf_hls4ml = compute_performance_metrics(model_name, speech_ops, speech_mems, frequency, clock_cycle, dsp_num, mul_per_dsp)
+    # print(perf_hls4ml)
+    print("\n=================================================================================")
+
+speech_model()
+
+
+
 def imdb_model():
     input_size = 100
     hidden_size = 128
     hidden_units = 200
     bit_width = 16
-    output_size = 1
+    output_size = [1]
     is_all_output = False
     num_tests = 1000
 
@@ -146,14 +290,16 @@ def imdb_model():
     perf_shir = compute_performance_metrics(model_name, imdb_ops, imdb_mems, frequency, clock_cycle, dsp_num, mul_per_dsp)
     print(perf_shir)
 
-    #For SHIR model:
-    clock_cycle = 21630000
-    frequency = 157 * (10**6)
-    dsp_num = 195
-    mul_per_dsp = 2
-    model_name = "HLS4ML-IMDB"
-    perf_hls4ml = compute_performance_metrics(model_name, imdb_ops, imdb_mems, frequency, clock_cycle, dsp_num, mul_per_dsp)
-    print(perf_hls4ml)
+    # #For hls4ml model:
+    # clock_cycle = 21630000
+    # frequency = 157 * (10**6)
+    # dsp_num = 195
+    # mul_per_dsp = 2
+    # model_name = "HLS4ML-IMDB"
+    # perf_hls4ml = compute_performance_metrics(model_name, imdb_ops, imdb_mems, frequency, clock_cycle, dsp_num, mul_per_dsp)
+    # print(perf_hls4ml)
     print("\n=================================================================================")
 
 imdb_model()
+
+

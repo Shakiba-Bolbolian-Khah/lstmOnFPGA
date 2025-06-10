@@ -8,6 +8,8 @@ parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.append(parent_dir)
 
 from fixedPointLStmWeight import *
+from sparseLSTM import SparseSHIR_LSTM
+from sparseLSTM import *
 from fixedPointLStmWeight import SHIR_LSTM
 from tensorflow.keras.datasets import mnist, imdb
 from tensorflow.keras.optimizers import Adam
@@ -31,7 +33,7 @@ from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
 # fix random seed for reproducibility
 np.random.seed(9)
 OUTPUT_DIR = 'imdb/'
-glove_dir = '/home/skhah/hls4ml/'
+glove_dir = './' #'/home/skhah/hls4ml/'
 
 # Parameters
 num_words = 10000  # Top 10,000 words
@@ -113,11 +115,16 @@ print(f"Embedded test data shape: {x_test_embedded.shape}")
 quantize_input(x_test_embedded, n_input, 'x', OUTPUT_DIR)
 quantize_matrix(y_test.astype(np.int32), 'y_test', OUTPUT_DIR, quantize = False, need_transpose = False)
 
+pruning_dic = {'f':[1,0.8], 'o':[1,0.8], 'i':[1,0.6], 'c':[1,0.6]}
 
-lstm = SHIR_LSTM(100,128,200,1)
-y = lstm.run_LSTM(OUTPUT_DIR, x_test_embedded, is_input_file = False, test_for_accuracy = True, dense_activation = "sigmoid")
+print("Sparsity Degree: ", pruning_dic)
+
+lstm = SparseSHIR_LSTM(100, 128, 200, 1, sparsity=i, what_to_prune= pruning_dic)  # 20% row-wise sparsity
+
+lstm.save_pruned_weights(OUTPUT_DIR)
+# y = lstm.run_LSTM(OUTPUT_DIR, x_test_embedded, is_input_file = False, test_for_accuracy = True, dense_activation = "sigmoid")
 
 
-y_pred_labels = (y/(2**FRAC_BITS) >= 0.5).astype(int)
+# y_pred_labels = (y/(2**FRAC_BITS) >= 0.5).astype(int)
 
-print("SHIR  Accuracy: {}".format(accuracy_score(y_test, y_pred_labels)))
+# print("SHIR  Accuracy: {}".format(accuracy_score(y_test, y_pred_labels)))

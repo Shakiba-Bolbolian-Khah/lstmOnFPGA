@@ -197,6 +197,17 @@ def mnist_model():
     perf_shir = compute_performance_metrics(model_name, mnist_ops, mnist_mems, frequency, clock_cycle, dsp_num, mul_per_dsp)
     print(perf_shir)
 
+    #For SHIR model:
+    clock_cycle = 30692726 #15510921
+    frequency = 200 * (10**6)
+    dsp_num = 75
+    mul_per_dsp = 2
+    model_name = "SHIR-MNIST-Sparsity of 0.8"
+    sparse_mnist_ops = 49600*10000
+    sparse_mnist_mems = mnist_mems - 10368
+    perf_shir = compute_performance_metrics(model_name, sparse_mnist_ops, sparse_mnist_mems, frequency, clock_cycle, dsp_num, mul_per_dsp)
+    print(perf_shir)
+
 
     # #For hls4ml model:
     clock_cycle = 21630000

@@ -8,6 +8,8 @@ parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.append(parent_dir)
 
 from fixedPointLStmWeight import *
+from sparseLSTM import SparseSHIR_LSTM
+from sparseLSTM import *
 from fixedPointLStmWeight import SHIR_LSTM
 from tensorflow.keras.datasets import mnist
 from tensorflow.keras.optimizers import Adam
@@ -30,7 +32,7 @@ from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
 
 # fix random seed for reproducibility
 np.random.seed(9)
-OUTPUT_DIR = 'mnist/'
+OUTPUT_DIR = './mnist/'
 # input dimension 
 n_input = 28
 # timesteps
@@ -62,13 +64,25 @@ x_test /= 255
 y_train = to_categorical(y_train, n_classes)
 y_test  = to_categorical(y_test,  n_classes)
 
-lstm = SHIR_LSTM(28,32,28,10)
-y = lstm.run_LSTM(OUTPUT_DIR, x_test, is_input_file = True, test_for_accuracy = True)
+# lstm = SHIR_LSTM(28,32,28,10)
+# y = lstm.run_LSTM(OUTPUT_DIR, x_test, is_input_file = True, test_for_accuracy = True)
 
 y_keras = load_matrix("y_keras", OUTPUT_DIR)
-
 # np.savetxt(OUTPUT_DIR + 'y_label.csv', np.argmax(y, axis=1), fmt='%i', delimiter=',')
 # np.savetxt(OUTPUT_DIR + 'y_keras_label.csv', np.argmax(y_keras, axis=1), fmt='%i', delimiter=',')
 
+
+pruning_dic = {'f':[1,0.75], 'o':[1,0.75], 'i':[1,0.75], 'c':[1,0.75]}
+block_number = {'w': 4, 'u': 4}
+
+print("Sparsity Degree: ", pruning_dic)
+
+lstm = SparseSHIR_LSTM(28, 32, 28, 1, sparsity=True, what_to_prune= pruning_dic, block_numbers=block_number)  # 20% row-wise sparsity
+
+lstm.save_pruned_weights(OUTPUT_DIR)
+y = lstm.run_LSTM(OUTPUT_DIR, x_test, is_input_file = True, test_for_accuracy = True, dense_activation = "sigmoid")
+
+
 print("Keras  Accuracy: {}".format(accuracy_score(np.argmax(y_test, axis=1), np.argmax(y_keras, axis=1))))
 print("SHIR  Accuracy: {}".format(accuracy_score(np.argmax(y_test, axis=1), np.argmax(y, axis=1))))
+

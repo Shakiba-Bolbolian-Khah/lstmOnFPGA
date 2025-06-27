@@ -115,16 +115,17 @@ print(f"Embedded test data shape: {x_test_embedded.shape}")
 quantize_input(x_test_embedded, n_input, 'x', OUTPUT_DIR)
 quantize_matrix(y_test.astype(np.int32), 'y_test', OUTPUT_DIR, quantize = False, need_transpose = False)
 
-pruning_dic = {'f':[1,0.8], 'o':[1,0.8], 'i':[1,0.6], 'c':[1,0.6]}
+pruning_dic = {'f':[1,0.8], 'o':[1,0.8], 'i':[1,0.8], 'c':[1,0.8]}
+block_number = {'w': 10, 'u': 16}
 
 print("Sparsity Degree: ", pruning_dic)
 
-lstm = SparseSHIR_LSTM(100, 128, 200, 1, sparsity=i, what_to_prune= pruning_dic)  # 20% row-wise sparsity
+lstm = SparseSHIR_LSTM(100, 128, 200, 1, sparsity=True, what_to_prune= pruning_dic, block_numbers=block_number)  # 20% row-wise sparsity
 
+# lstm.save_pruned_weights(OUTPUT_DIR)
 lstm.save_pruned_weights(OUTPUT_DIR)
-# y = lstm.run_LSTM(OUTPUT_DIR, x_test_embedded, is_input_file = False, test_for_accuracy = True, dense_activation = "sigmoid")
+y = lstm.run_LSTM(OUTPUT_DIR, x_test_embedded, is_input_file = False, test_for_accuracy = True, dense_activation = "sigmoid")
 
+y_pred_labels = (y/(2**FRAC_BITS) >= 0.5).astype(int)
 
-# y_pred_labels = (y/(2**FRAC_BITS) >= 0.5).astype(int)
-
-# print("SHIR  Accuracy: {}".format(accuracy_score(y_test, y_pred_labels)))
+print("SHIR  Accuracy: {}".format(accuracy_score(y_test, y_pred_labels)))

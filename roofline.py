@@ -301,6 +301,28 @@ def imdb_model():
     perf_shir = compute_performance_metrics(model_name, imdb_ops, imdb_mems, frequency, clock_cycle, dsp_num, mul_per_dsp)
     print(perf_shir)
 
+    #For SHIR model:
+    clock_cycle = 29808874 #(29779168 for 999 items)
+    frequency = 200 * (10**6)
+    dsp_num = 249
+    mul_per_dsp = 2
+    model_name = "SHIR-IMDB- Sparsity of 0.8"
+    num_ops = 5325184 * 1000
+    memory = imdb_mems - 180224
+    perf_shir = compute_performance_metrics(model_name, num_ops, memory, frequency, clock_cycle, dsp_num, mul_per_dsp)
+    print(perf_shir)
+
+    #For SHIR model:
+    clock_cycle = 30012757
+    frequency = 200 * (10**6)
+    dsp_num = 305
+    mul_per_dsp = 2
+    model_name = "SHIR-IMDB- Sparsity of 0.7"
+    num_ops = 0
+    memory = 0
+    perf_shir = compute_performance_metrics(model_name, num_ops, memory, frequency, clock_cycle, dsp_num, mul_per_dsp)
+    print(perf_shir)
+
     # #For hls4ml model:
     # clock_cycle = 21630000
     # frequency = 157 * (10**6)

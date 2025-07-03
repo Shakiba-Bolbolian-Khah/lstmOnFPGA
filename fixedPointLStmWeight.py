@@ -183,7 +183,7 @@ def quantize_matrix(data, name: str, dir: str, quantize: bool = True, need_trans
         quantized_data = np.round(reshaped_data * (2**FRAC_BITS)).astype(int_type(BIT_WIDTH))
         np.savetxt(dir + name + '.csv', quantized_data.astype(int_type(BIT_WIDTH)), fmt='%i', delimiter=',')
     else:
-        np.savetxt(dir + name + '.csv', reshaped_data.astype(np.float32), fmt='%f', delimiter=',')
+        np.savetxt(dir + name + '.csv', reshaped_data.astype(int_type(BIT_WIDTH)), fmt='%i', delimiter=',')
 
 
 def quantize_input(data, n_input, name: str, dir: str, quantize: bool = True):
@@ -196,16 +196,19 @@ def quantize_input(data, n_input, name: str, dir: str, quantize: bool = True):
         np.savetxt(dir + name + '.csv', reshaped_data.astype(np.float32), fmt='%f', delimiter=',')
 
 
-def load_matrix(name: str, dir: str, quantize: bool = False):
+def load_matrix(name: str, dir: str, quantize: bool = False, need_transpose: bool = False):
 
     with open(dir + name +'.csv', 'r') as f:
         reader = csv.reader(f)
         data = list(reader)
+
     if quantize:
         data_array = np.array(data, dtype=np.float32)
         data_array = v_bankers_round((data_array * (2**FRAC_BITS)).astype(int_type(BIT_WIDTH)),0)
     else:
         data_array = np.array(data, dtype=int_type(BIT_WIDTH))
+        
+    data_array = data_array.T if need_transpose else data_array
     return data_array
 
 
@@ -228,16 +231,16 @@ class SHIR_LSTM:
         self.wc = generate_random_matrix(self.hidden_size, self.input_size, "wc")
 
 
-    def load_weights(self, dir):
-        self.uf = load_matrix("uf", dir)
-        self.ui = load_matrix("ui", dir)
-        self.uo = load_matrix("uo", dir)
-        self.uc = load_matrix("uc", dir)
+    def load_weights(self, dir, quantize = False, need_transpose = False):
+        self.uf = load_matrix("uf", dir, quantize, need_transpose)
+        self.ui = load_matrix("ui", dir, quantize, need_transpose)
+        self.uo = load_matrix("uo", dir, quantize, need_transpose)
+        self.uc = load_matrix("uc", dir, quantize, need_transpose)
 
-        self.wf = load_matrix("wf", dir)
-        self.wi = load_matrix("wi", dir)
-        self.wo = load_matrix("wo", dir)
-        self.wc = load_matrix("wc", dir)
+        self.wf = load_matrix("wf", dir, quantize, need_transpose)
+        self.wi = load_matrix("wi", dir, quantize, need_transpose)
+        self.wo = load_matrix("wo", dir, quantize, need_transpose)
+        self.wc = load_matrix("wc", dir, quantize, need_transpose)
 
 
     def generate_biases(self):
@@ -247,11 +250,11 @@ class SHIR_LSTM:
         self.bc = generate_random_vector(self.hidden_size, "bc").reshape(self.hidden_size,)
 
 
-    def load_biases(self, dir):
-        self.bf = load_matrix("bf", dir).reshape(self.hidden_size,)
-        self.bi = load_matrix("bi", dir).reshape(self.hidden_size,)
-        self.bo = load_matrix("bo", dir).reshape(self.hidden_size,)
-        self.bc = load_matrix("bc", dir).reshape(self.hidden_size,)
+    def load_biases(self, dir, quantize = False):
+        self.bf = load_matrix("bf", dir, quantize).reshape(self.hidden_size,)
+        self.bi = load_matrix("bi", dir, quantize).reshape(self.hidden_size,)
+        self.bo = load_matrix("bo", dir, quantize).reshape(self.hidden_size,)
+        self.bc = load_matrix("bc", dir, quantize).reshape(self.hidden_size,)
 
 
     def generate_initial_state(self, dir):
@@ -260,19 +263,19 @@ class SHIR_LSTM:
 
         np.savetxt(dir + 'state' + '.csv', np.concatenate([self.h0, self.c0]).T.astype(int_type(BIT_WIDTH)), fmt='%i', delimiter=',')
 
-    def load_dense_layer(self, dir, num = 1):
+    def load_dense_layer(self, dir, num = 1, quantize = False, need_transpose = False):
         self.wd = {}
         self.bd = {}
         if num != 1:
             for i in range(num):
                 new_name = str(i + 1)
 
-                self.wd[new_name] = load_matrix("wd"+new_name, dir)
-                self.bd[new_name] = load_matrix("bd"+new_name, dir).reshape(-1,)
+                self.wd[new_name] = load_matrix("wd"+new_name, dir, quantize, need_transpose)
+                self.bd[new_name] = load_matrix("bd"+new_name, dir, quantize).reshape(-1,)
         else:
             new_name = '1'
-            self.wd[new_name] = load_matrix("wd", dir)
-            self.bd[new_name] = load_matrix("bd", dir).reshape(-1,)
+            self.wd[new_name] = load_matrix("wd", dir, quantize, need_transpose)
+            self.bd[new_name] = load_matrix("bd", dir, quantize).reshape(-1,)
 
 
     def generate_input(self):

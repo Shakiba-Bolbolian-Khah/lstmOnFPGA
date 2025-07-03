@@ -2,33 +2,84 @@ import numpy as np
 from fixedPointLStmWeight import *
 import os
 
+# def prune_matrix_by_block_percent(matrix: np.ndarray, percent: float, n_blocks: int) -> np.ndarray:
+#     """
+#     Prunes each row of the matrix by dividing it into blocks and removing a percentage of the 
+#     smallest absolute values within each block.
+
+#     Parameters:
+#         matrix (np.ndarray): The matrix to prune
+#         percent (float): Percentage of values to remove in each block
+#         n_blocks (int): Number of blocks to divide each row into
+#     """
+#     pruned_matrix = np.copy(matrix)
+#     rows, cols = matrix.shape
+#     # assert cols % n_blocks == 0, "Number of columns must be divisible by number of blocks"
+#     block_size = cols // n_blocks
+
+#     for i in range(rows):
+#         for b in range(n_blocks):
+#             start = b * block_size
+#             end = (b + 1) * block_size
+#             block = matrix[i, start:end]
+#             abs_block = np.abs(block)
+
+#             val = (1 - percent) * block_size
+#             if val > 1 and (val - int(val)) < 0.5:
+#                 n_keep = int(np.floor(val))
+#             else:
+#                 n_keep = int(np.ceil(val))
+#             if n_keep == 0:
+#                 top_indices = np.argsort(-abs_block)[:1]
+#             else:
+#                 top_indices = np.argsort(-abs_block)[:n_keep]
+
+#             mask = np.zeros_like(block, dtype=np.int8)
+#             mask[top_indices] = 1
+#             pruned_matrix[i, start:end] = block * mask
+
+#     sparsity_level = 1 - np.count_nonzero(pruned_matrix) / pruned_matrix.size
+#     print("Block-wise Sparsity Level: ", sparsity_level)
+#     print("Pruned Matrix:    " , pruned_matrix.shape, '  Num of Zero in first row:  ', np.sum(pruned_matrix[0] == 0))
+#     return pruned_matrix
+
 def prune_matrix_by_block_percent(matrix: np.ndarray, percent: float, n_blocks: int) -> np.ndarray:
     """
     Prunes each row of the matrix by dividing it into blocks and removing a percentage of the 
-    smallest absolute values within each block.
-
+    smallest absolute values within each block (block-wise pruning).
+    
     Parameters:
         matrix (np.ndarray): The matrix to prune
-        percent (float): Percentage of values to remove in each block
+        percent (float): Percentage of values to remove in each block (0.0 to 1.0)
         n_blocks (int): Number of blocks to divide each row into
     """
     pruned_matrix = np.copy(matrix)
     rows, cols = matrix.shape
-    assert cols % n_blocks == 0, "Number of columns must be divisible by number of blocks"
-    block_size = cols // n_blocks
+    block_size = int(np.ceil(cols / n_blocks))  # Match second function
+
+    top_percent = 1 - percent
 
     for i in range(rows):
         for b in range(n_blocks):
             start = b * block_size
-            end = (b + 1) * block_size
+            end = min((b + 1) * block_size, cols)
             block = matrix[i, start:end]
-            abs_block = np.abs(block)
+            block_length = end - start
+            if block_length == 0:
+                continue
 
-            n_keep = int(np.ceil((1 - percent) * block_size))
-            if n_keep == 0:
-                top_indices = np.argsort(-abs_block)[:1]
+            val = top_percent * block_length
+            if  (val - int(val)) < 0.5: #val > 1 and
+                n_keep = int(np.floor(val))
             else:
-                top_indices = np.argsort(-abs_block)[:n_keep]
+                n_keep = int(np.ceil(val))
+
+            abs_block = np.abs(block)
+            if n_keep == 0:
+                top_indices = np.argsort(-abs_block)[:1]  # keep at least one
+            else:
+                # Fast top-k using argpartition, like second function
+                top_indices = np.argpartition(-abs_block, n_keep - 1)[:n_keep]
 
             mask = np.zeros_like(block, dtype=np.int8)
             mask[top_indices] = 1
@@ -36,7 +87,7 @@ def prune_matrix_by_block_percent(matrix: np.ndarray, percent: float, n_blocks: 
 
     sparsity_level = 1 - np.count_nonzero(pruned_matrix) / pruned_matrix.size
     print("Block-wise Sparsity Level: ", sparsity_level)
-    print("Pruned Matrix:    " , pruned_matrix.shape, '  Num of Zero in first row:  ', np.sum(pruned_matrix[0] == 0))
+    print("Pruned Matrix:    ", pruned_matrix.shape, '  Num of non-Zero in first row:  ', len(pruned_matrix[0])-(np.sum(pruned_matrix[0] == 0)))
     return pruned_matrix
 
 
@@ -116,7 +167,12 @@ class SparseSHIR_LSTM(SHIR_LSTM):
                 if block_length == 0:
                     continue
 
-                n_keep = int(np.ceil(top_percent * block_length))
+                val = top_percent * block_length
+                if (val - int(val)) < 0.5: #val > 1 and 
+                    n_keep = int(np.floor(val))
+                else:
+                    n_keep = int(np.ceil(val))
+
                 abs_block = np.abs(block)
                 top_indices = np.argpartition(-abs_block, n_keep - 1)[:n_keep]
                 sorted_indices = np.sort(top_indices)
@@ -159,7 +215,7 @@ class SparseSHIR_LSTM(SHIR_LSTM):
         print(f"Saved pruned values and block-relative indices for {file_name}")
         print(f"Original shape: {matrix.shape}, Block size: {block_size}, Padded shape: {value_matrix_pad.shape}")
 
-    def prune_save_weight_matrix(self, sparsity, file_name, dir):
+    def prune_save_weight_matrix(self, sparsity, matrix):
         """
         Prunes a weight matrix row-wise by keeping the top-N% absolute values.
         Outputs value and index matrices and saves them as CSV files.

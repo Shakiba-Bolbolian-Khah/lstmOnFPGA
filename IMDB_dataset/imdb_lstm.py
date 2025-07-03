@@ -40,7 +40,7 @@ def plot(a, b=None):
 # fix random seed for reproducibility
 np.random.seed(9)
 OUTPUT_DIR = 'imdb/'
-glove_dir = '/home/skhah/hls4ml/'
+glove_dir = './' #'/home/skhah/hls4ml/'
 
 # Parameters
 num_words = 10000  # Top 10,000 words
